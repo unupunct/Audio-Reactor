@@ -85,7 +85,7 @@ dotnet tool restore
 dotnet wix extension add WixToolset.UI.wixext/5.0.2
 dotnet wix extension add WixToolset.BootstrapperApplications.wixext/5.0.2
 Tools\fetch-ffmpeg.ps1                        # once, to bundle ffmpeg.exe
-Tools\build-installer.ps1 -Version 1.0.0      # -> Installer\AudioReactor-Setup.exe and AudioReactor.msi
+Tools\build-installer.ps1 -Version 1.1.0      # -> Installer\AudioReactor-Setup.exe and AudioReactor.msi
 ```
 
 ```
