@@ -1,0 +1,12 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+  <!-- Wraps the MSI in AudioReactor-Setup.exe (per-user, no elevation). -->
+  <Bundle Name="Audio Reactor" Manufacturer="Audio Reactor" Version="$(var.Version)" UpgradeCode="3D1E8F52-7A64-4B0C-8E19-C4A5D2F70B96"
+          IconSourceFile="$(var.IconFile)" Compressed="yes">
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense" LicenseUrl="https://github.com/unupunct/Audio-Reactor/blob/main/LICENSE" SuppressOptionsUI="no" />
+    </BootstrapperApplication>
+    <Chain>
+      <MsiPackage Id="AudioReactorMsi" SourceFile="$(var.MsiFile)" Visible="no" />
+    </Chain>
+  </Bundle>
+</Wix>

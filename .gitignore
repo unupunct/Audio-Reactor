@@ -1,0 +1,17 @@
+bin/
+obj/
+.vs/
+*.user
+Release/
+ThirdParty/ffmpeg-dl/
+**/ThirdParty/ffmpeg/ffmpeg.exe
+Installer/obj/
+Installer/*.msi
+Installer/*.exe
+Installer/*.wixpdb
+Demo/*.mp4
+Demo/rec-test/
+Demo/yt-test/
+Demo/inst-test/
+*.log
+.wix/

@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html,body{margin:0;height:100%;background:#05060a;overflow:hidden}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #hud{position:absolute;left:12px;top:10px;color:#9fb0d0;font:12px Segoe UI,sans-serif;pointer-events:none;text-shadow:0 0 6px #000}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<script src="engine.js"></script>
+<script src="presets1.js"></script>
+<script src="presets2.js"></script>
+<script src="presets3.js"></script>
+<script src="presets4.js"></script>
+<script>
+  Reactor.start(document.getElementById('c'), document.getElementById('hud'));
+</script>
+</body>
+</html>

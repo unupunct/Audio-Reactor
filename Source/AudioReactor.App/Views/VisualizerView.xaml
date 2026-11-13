@@ -1,0 +1,9 @@
+<UserControl x:Class="AudioReactor.App.Views.VisualizerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wv="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf">
+    <Grid Background="#05060A">
+        <wv:WebView2 x:Name="Web" DefaultBackgroundColor="#05060A"/>
+        <TextBlock x:Name="ErrorText" Style="{StaticResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="480" Visibility="Collapsed"/>
+    </Grid>
+</UserControl>

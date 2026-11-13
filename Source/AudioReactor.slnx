@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="AudioReactor.App/AudioReactor.App.csproj" />
+  <Project Path="AudioReactor.Core/AudioReactor.Core.csproj" />
+  <Project Path="AudioReactor.Tests/AudioReactor.Tests.csproj" />
+</Solution>
