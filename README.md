@@ -13,9 +13,9 @@ Play your music or a radio stream, watch 51 visual presets react to the actual a
 
 ## Features
 
-**Music player** — MP3, WAV, FLAC, OGG, M4A, WMA (via the Windows decoders / Vorbis). Library with tags and artwork, search, sort, favorites, recently added / played / most played, playlists (create, rename, reorder, import/export M3U), smart playlists (genre, artist, frequently played…), queue, shuffle and repeat, drag and drop, playback speed, 10-band equalizer with presets, output-device selection with automatic recovery when a device disappears.
+**Music player** — MP3, WAV, FLAC, OGG, M4A, WMA (via the Windows decoders / Vorbis). Library with tags and artwork, search, sort, favorites, recently added / played / most played, playlists (create, rename, reorder, import/export M3U), smart playlists (genre, artist, frequently played…), queue, shuffle and repeat, drag and drop, **gapless playback and crossfade** (0–12 s), playback speed, 10-band equalizer with presets, output-device selection with automatic recovery when a device disappears.
 
-**Internet radio** — add your own stations (nothing is hard-coded), import `.m3u` / `.pls`, Icecast and SHOUTcast streams with now-playing metadata, configurable buffer, automatic reconnect, favorites and recently played. AAC / HLS streams fall back to the Windows media decoder.
+**Internet radio** — add your own stations (nothing is hard-coded), import `.m3u` / `.pls`, Icecast and SHOUTcast streams with now-playing metadata, configurable buffer, automatic reconnect, favorites and recently played. AAC / HLS streams fall back to the Windows media decoder. **Radio sound filter:** *even volume* (loudness leveling so every song and station plays at the same loudness, silence and noise are never boosted) and *clean sound* (rumble filter, hiss reduction between sounds, clipping protection).
 
 **Visualizer engine** — FFT analysis (bass, low-mid, mid, high-mid, treble, energy, volume), real-time beat and BPM detection, and **51 presets** across Classic, 3D, Particles, Abstract and Environment. Every preset is driven by the live audio. 11 colour palettes, quality levels Low → Ultra, frame-rate limit, fullscreen on a second monitor, effect & palette editor, custom presets you can import and export.
 
@@ -54,6 +54,8 @@ Every claim below was tested on one Windows 11 machine. Nothing here was tested 
 | Audio analysis (FFT, bands, beat/BPM) | ✅ Automated tests; a 120 BPM test track is detected as 120.0 BPM |
 | Format decoding (MP3, FLAC, OGG, M4A, WMA, WAV) | ✅ Automated tests decode each format. Raw `.aac` (ADTS) plays but its duration is only an estimate |
 | Playback, EQ, effects, speed | ✅ Automated tests + played on the real audio device |
+| Gapless + crossfade | ✅ Exact-join and crossfade-math tests, a real-device test, and a 3-track queue run in the app (tracks of different sample rates) |
+| Radio even-volume / clean-sound filter | ✅ Measured on synthetic audio (20 dB loudness gap → 0.4 dB; hiss −61 → −72 dB; rumble removed). ⚠️ Not yet listened to on live stations |
 | 51 visualizer presets | ✅ All run without errors and visibly react to audio (automated); several viewed live |
 | Internet radio (Icecast/SHOUTcast protocol, metadata, reconnect) | ✅ Tested against a **local** Icecast-style test server. ⚠️ **Not yet tested against live internet stations**; AAC/HLS streams (Windows decoder fallback) are untested |
 | Recording and YouTube export | ✅ MP4 (H.264 High + AAC 48 kHz) produced and inspected; thumbnail and description generated |
@@ -63,7 +65,7 @@ Every claim below was tested on one Windows 11 machine. Nothing here was tested 
 
 ### Not implemented yet
 
-Crossfade and gapless playback · a free-floating "desktop mode" visualizer window and screen-saver mode · compact player mode (the mini player is available) · per-frequency routing editor and bloom in the effect editor · GPU/WebGL 3D scenes (the "3D" presets are software-projected canvas effects) · output sample-rate / capture-device / channel configuration (playback device and latency are configurable) · CPU/GPU meters in the UI (the FPS counter is shown) · radio category browser and station logos fetched from the web (logo URLs you enter are shown).
+A free-floating "desktop mode" visualizer window and screen-saver mode · compact player mode (the mini player is available) · per-frequency routing editor and bloom in the effect editor · GPU/WebGL 3D scenes (the "3D" presets are software-projected canvas effects) · output sample-rate / capture-device / channel configuration (playback device and latency are configurable) · CPU/GPU meters in the UI (the FPS counter is shown) · radio category browser and station logos fetched from the web (logo URLs you enter are shown).
 
 ## Build from source
 
@@ -71,7 +73,7 @@ Requirements: Windows 10/11, .NET 10 SDK. For recording/export you also need `ff
 
 ```powershell
 dotnet build Source\AudioReactor.sln
-dotnet test  Source\AudioReactor.sln          # 65 tests
+dotnet test  Source\AudioReactor.sln          # 81 tests
 node Tools\test-presets.js                    # headless test of all 51 presets
 dotnet run --project Source\AudioReactor.App
 ```

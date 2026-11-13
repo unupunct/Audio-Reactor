@@ -16,7 +16,10 @@ public enum PlaybackState2 { Stopped, Playing, Paused }
 public sealed class AudioEngine : IDisposable
 {
     private WasapiOut? _out;
-    private WaveStream? _reader;
+    private WaveStream? _reader;            // only used for the Media Foundation radio fallback
+    private TrackMixer? _mixer;             // gapless / crossfade playback of local files
+    private bool _live;                     // true while playing radio
+    private float _crossfade;
     private RadioSource? _radio;
     private Equalizer? _eq;
     private EffectsChain? _fx;
@@ -41,10 +44,16 @@ public sealed class AudioEngine : IDisposable
     public const int InternalRate = 48000;
     public float GainReductionDb => _fx?.GainReductionDb ?? 0;
     public PlaybackState2 State { get; private set; } = PlaybackState2.Stopped;
-    public bool IsRadio => _radio != null;
+    /// <summary>Loudness leveling / noise cleaning options. Always applied to radio; to local files only when <see cref="SoundCleanSettings.ApplyToFiles"/> is on.</summary>
+    public SoundCleanSettings SoundClean { get; set; } = new();
+    public bool IsRadio => _radio != null || _live;
     public RadioSource? Radio => _radio;
-    public TimeSpan Position { get => _reader?.CurrentTime ?? TimeSpan.Zero; set { if (_reader?.CanSeek == true) _reader.CurrentTime = value; } }
-    public TimeSpan Duration => _reader?.TotalTime ?? TimeSpan.Zero;
+    public TimeSpan Position { get => _mixer != null ? _mixer.Position : (_reader?.CurrentTime ?? TimeSpan.Zero); set { if (_mixer != null) _mixer.Seek(value); else if (_reader?.CanSeek == true) _reader.CurrentTime = value; } }
+    public TimeSpan Duration => _mixer != null ? _mixer.Duration : (_reader?.TotalTime ?? TimeSpan.Zero);
+    /// <summary>Crossfade between tracks in seconds (0 = off). Only used when a next track has been queued with <see cref="PrepareNext"/>.</summary>
+    public float CrossfadeSeconds { get => _crossfade; set { _crossfade = Math.Clamp(value, 0, 12); if (_mixer != null) _mixer.CrossfadeSeconds = _crossfade; } }
+    /// <summary>Raised (audio thread) when playback moved on to the queued next track without a gap. Argument: its file path.</summary>
+    public event Action<string?>? NextTrackStarted;
     public float Volume { get => _volume; set { _volume = Math.Clamp(value, 0, 1); if (_tap != null) _tap.Volume = _volume; } }
     public bool EqEnabled { get => _eqEnabled; set { _eqEnabled = value; if (_eq != null) _eq.Enabled = value; } }
     public int LatencyMs { get => _latencyMs; set => _latencyMs = Math.Clamp(value, 20, 1000); }
@@ -118,22 +127,40 @@ public sealed class AudioEngine : IDisposable
         Stop();
         try
         {
-            WaveStream r = Path.GetExtension(path).Equals(".ogg", StringComparison.OrdinalIgnoreCase)
-                ? new VorbisWaveReader(path) : new MediaFoundationReader(path);
-            _reader = r;
-            BuildOutput(r.ToSampleProvider());
+            var src = TrackSource.FromFile(path);
+            _mixer = new TrackMixer { CrossfadeSeconds = _crossfade };
+            _mixer.AdvancedToNext += s => NextTrackStarted?.Invoke(s.Path);
+            _mixer.SetCurrent(src);
+            BuildOutput(_mixer);
         }
         catch (Exception ex)
         {
+            _mixer?.Dispose(); _mixer = null;
             Log.Error(ex, "Cannot open {Path}", path);
             Error?.Invoke($"Cannot play {Path.GetFileName(path)}: {ex.Message}");
             throw;
         }
     }
 
+    public enum PrepareResult { Ok, Busy, Failed, NoCurrentTrack }
+
+    /// <summary>Opens the next file in advance so playback can continue into it with no gap (or crossfade). Replaces any earlier choice.</summary>
+    public PrepareResult PrepareNext(string path)
+    {
+        var m = _mixer; if (m == null) return PrepareResult.NoCurrentTrack;
+        TrackSource src;
+        try { src = TrackSource.FromFile(path); }
+        catch (Exception ex) { Log.Warning(ex, "Cannot pre-open next track {Path}", path); return PrepareResult.Failed; }
+        if (m.SetNext(src) == TrackMixer.NextResult.Busy) { src.Dispose(); return PrepareResult.Busy; }
+        return PrepareResult.Ok;
+    }
+
+    /// <summary>Forget the queued next track (used when gapless is off or the queue ends).</summary>
+    public void ClearNext() => _mixer?.SetNext(null);
+
     public async Task OpenRadioAsync(string url, int bufferSeconds)
     {
-        Stop();
+        Stop(); _live = true;
         var radio = new RadioSource(url, bufferSeconds);
         radio.Error += m => Error?.Invoke(m);
         try
@@ -160,6 +187,7 @@ public sealed class AudioEngine : IDisposable
         if (chain.WaveFormat.Channels == 1) chain = new MonoToStereoSampleProvider(chain);
         // One internal rate (48 kHz) keeps effects, analysis and recordings consistent across tracks with different sample rates.
         if (chain.WaveFormat.SampleRate != InternalRate) chain = new WdlResamplingSampleProvider(chain, InternalRate);
+        chain = new SoundCleaner(chain, SoundClean) { IsLive = IsRadio };
         _speed = new SpeedProvider(chain) { Speed = IsRadio ? 1f : _playbackSpeed };
         _fx = new EffectsChain(_speed, Effects);
         _eq = new Equalizer(_fx, _gains) { Enabled = _eqEnabled };
@@ -177,7 +205,7 @@ public sealed class AudioEngine : IDisposable
         {
             if (_stopping) return;
             if (e.Exception != null) { Log.Error(e.Exception, "Playback stopped"); Error?.Invoke(e.Exception.Message); SetState(PlaybackState2.Stopped); }
-            else if (_reader != null && _reader.CurrentTime >= _reader.TotalTime - TimeSpan.FromMilliseconds(500))
+            else if (_mixer != null ? _mixer.Ended : (_reader != null && _reader.CurrentTime >= _reader.TotalTime - TimeSpan.FromMilliseconds(500)))
             { SetState(PlaybackState2.Stopped); TrackEnded?.Invoke(); }
         };
     }
@@ -191,6 +219,7 @@ public sealed class AudioEngine : IDisposable
         try
         {
             _out?.Stop(); _out?.Dispose(); _out = null;
+            _mixer?.Dispose(); _mixer = null; _live = false;
             _reader?.Dispose(); _reader = null;
             _radio?.Dispose(); _radio = null;
             _lastProvider = null;

@@ -41,6 +41,9 @@ public sealed partial class PlayerService : ObservableObject, IDisposable
         Engine.Volume = (float)settings.Volume;
         Engine.LatencyMs = settings.LatencyMs;
         Engine.Effects = settings.Effects;
+        Engine.SoundClean = settings.SoundClean;
+        Engine.CrossfadeSeconds = (float)settings.CrossfadeSeconds;
+        Engine.NextTrackStarted += _ => System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => OnSeamlessAdvance());
         Engine.EqEnabled = settings.EqEnabled;
         Engine.SetEq(settings.EqGains);
         Engine.SetDevice(settings.OutputDeviceId);
@@ -56,7 +59,7 @@ public sealed partial class PlayerService : ObservableObject, IDisposable
         PlayAt(startIndex);
     }
 
-    public void Enqueue(Track t) { Queue.Add(t); RebuildShuffle(QueueIndex); }
+    public void Enqueue(Track t) { Queue.Add(t); RebuildShuffle(QueueIndex); PrepareNextTrack(); }
 
     private void RebuildShuffle(int current)
     {
@@ -71,13 +74,10 @@ public sealed partial class PlayerService : ObservableObject, IDisposable
         try
         {
             Engine.OpenFile(t.Path);
-            QueueIndex = index; CurrentTrack = t; CurrentStation = null; RadioStatus = "";
-            NowTitle = t.Title; NowArtist = t.Artist; NowAlbum = t.Album;
-            Artwork = LibraryScanner.ReadArtwork(t.Path);
+            RadioStatus = ""; CurrentStation = null;
+            ApplyNowPlaying(index);
             Engine.Play();
-            _db.MarkPlayed(t.Id);
-            _settings.LastTrackId = t.Id;
-            Notify?.Invoke("track", t.Display);
+            PrepareNextTrack();
         }
         catch (Exception ex)
         {
@@ -86,6 +86,66 @@ public sealed partial class PlayerService : ObservableObject, IDisposable
             if (Queue.Count > 1 && index != Queue.Count - 1) PlayAt(index + 1);
         }
     }
+
+    /// <summary>Updates now-playing state, play count and notifications for a track that has started (opened by PlayAt or reached seamlessly).</summary>
+    private void ApplyNowPlaying(int index)
+    {
+        var t = Queue[index];
+        QueueIndex = index; CurrentTrack = t; CurrentStation = null;
+        NowTitle = t.Title; NowArtist = t.Artist; NowAlbum = t.Album;
+        Artwork = LibraryScanner.ReadArtwork(t.Path);
+        _db.MarkPlayed(t.Id);
+        _settings.LastTrackId = t.Id;
+        Notify?.Invoke("track", t.Display);
+    }
+
+    // ---------- gapless / crossfade ----------
+    private int _pendingNext = -1;
+    public bool Seamless => _settings.Gapless || _settings.CrossfadeSeconds > 0.05;
+
+    /// <summary>Index of the track that will follow the current one, or -1 if playback should end. Does not consume the shuffle order.</summary>
+    public int PeekNextIndex()
+    {
+        if (Queue.Count == 0 || QueueIndex < 0) return -1;
+        if (Repeat == "One") return QueueIndex;
+        if (Shuffle)
+        {
+            if (_shuffleOrder.Count == 0) { if (Repeat == "Off") return -1; RebuildShuffle(QueueIndex); }
+            return _shuffleOrder.Count > 0 ? _shuffleOrder[0] : QueueIndex;
+        }
+        int n = QueueIndex + 1;
+        if (n >= Queue.Count) return Repeat == "All" ? 0 : -1;
+        return n;
+    }
+
+    /// <summary>(Re)opens the next track in the engine so the join is seamless. Called after anything that can change what comes next.</summary>
+    public void PrepareNextTrack()
+    {
+        if (IsRadio || CurrentTrack == null) return;
+        Engine.CrossfadeSeconds = (float)_settings.CrossfadeSeconds;
+        if (!Seamless) { Engine.ClearNext(); _pendingNext = -1; return; }
+        int idx = PeekNextIndex();
+        if (idx < 0) { Engine.ClearNext(); _pendingNext = -1; return; }
+        switch (Engine.PrepareNext(Queue[idx].Path))
+        {
+            case AudioEngine.PrepareResult.Ok: _pendingNext = idx; break;
+            case AudioEngine.PrepareResult.Busy: break;                       // a crossfade is already running into the old choice; keep it
+            default: _pendingNext = -1; break;                                // unplayable/none: the normal end-of-track path will skip it
+        }
+    }
+
+    /// <summary>Called when the engine has moved into the prepared track with no gap.</summary>
+    private void OnSeamlessAdvance()
+    {
+        int idx = _pendingNext; if (idx < 0 || idx >= Queue.Count) return;
+        if (Repeat != "One" && Shuffle && _shuffleOrder.Count > 0 && _shuffleOrder[0] == idx) _shuffleOrder.RemoveAt(0);
+        ApplyNowPlaying(idx);
+        _pendingNext = -1;
+        PrepareNextTrack();
+    }
+
+    /// <summary>Call after changing gapless/crossfade, shuffle or repeat so the pre-opened next track matches.</summary>
+    public void ApplyTransitionSettings() { Engine.CrossfadeSeconds = (float)_settings.CrossfadeSeconds; PrepareNextTrack(); }
 
     public async Task PlayStationAsync(Station s)
     {
@@ -130,6 +190,7 @@ public sealed partial class PlayerService : ObservableObject, IDisposable
             Engine.OpenFile(t.Path); QueueIndex = index; CurrentTrack = t; CurrentStation = null;
             NowTitle = t.Title; NowArtist = t.Artist; NowAlbum = t.Album; Artwork = LibraryScanner.ReadArtwork(t.Path);
             if (position > TimeSpan.Zero && position < Engine.Duration) Engine.Position = position;
+            PrepareNextTrack();
         }
         catch (Exception ex) { Log.Warning(ex, "Could not restore last track {Path}", t.Path); }
     }
@@ -173,8 +234,8 @@ public sealed partial class PlayerService : ObservableObject, IDisposable
         if (Repeat == "One") PlayAt(QueueIndex); else Next();
     }
 
-    public void CycleRepeat() { Repeat = Repeat switch { "Off" => "All", "All" => "One", _ => "Off" }; _settings.Repeat = Repeat; }
-    public void ToggleShuffle() { Shuffle = !Shuffle; _settings.Shuffle = Shuffle; }
+    public void CycleRepeat() { Repeat = Repeat switch { "Off" => "All", "All" => "One", _ => "Off" }; _settings.Repeat = Repeat; PrepareNextTrack(); }
+    public void ToggleShuffle() { Shuffle = !Shuffle; _settings.Shuffle = Shuffle; PrepareNextTrack(); }
     public void SetVolume(double v) { Engine.Volume = (float)v; _settings.Volume = v; }
 
     public void Dispose() => Engine.Dispose();

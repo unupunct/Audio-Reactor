@@ -19,6 +19,12 @@ Corrupted or unsupported files are skipped and logged. Raw `.aac` files may show
 - AAC and HLS (`.m3u8`) streams use the Windows decoder as a fallback and are less tested than MP3 streams.
 - Try a larger *Radio buffer* on slow connections.
 
+## There is a short gap between songs
+Make sure *Settings → Track transitions → Gapless* is on. Gaps can still occur when you skip manually, for raw `.aac` files, or when the next file cannot be opened (it is then skipped).
+
+## Radio sounds too quiet, too loud or pumping
+Adjust *Settings → Radio sound → Target loudness*, or turn *Even volume* off. If a station sounds dull or over-processed, turn *Clean sound* off.
+
 ## The visualizer stutters
 Use **Quality: Low/Medium** and a 30 fps limit (*Settings → Visuals*). Heavy presets (plasma, nebula, fractals) cost more; the particle and spectrum presets are light.
 

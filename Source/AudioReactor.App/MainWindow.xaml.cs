@@ -89,12 +89,13 @@ public partial class MainWindow : Window
     private void HandleCommandLine()
     {
         var args = Environment.GetCommandLineArgs().Skip(1).ToList();
-        string? page = null, preset = null; (int secs, string folder)? selfTest = null; (string song, string folder)? ytTest = null; var files = new List<string>();
+        string? page = null, preset = null; (int secs, string folder)? selfTest = null; (string song, string folder)? ytTest = null; bool seamlessTest = false; var files = new List<string>();
         for (int i = 0; i < args.Count; i++)
         {
             if (args[i] == "--page" && i + 1 < args.Count) page = args[++i];
             else if (args[i] == "--preset" && i + 1 < args.Count) preset = args[++i];
             else if (args[i] == "--selftest-youtube" && i + 2 < args.Count) { ytTest = (args[i + 1], args[i + 2]); i += 2; }
+            else if (args[i] == "--selftest-seamless") { seamlessTest = true; }
             else if (args[i] == "--selftest-record" && i + 2 < args.Count) { selfTest = (int.Parse(args[i + 1]), args[i + 2]); i += 2; }
             else if (File.Exists(args[i]) || Directory.Exists(args[i])) files.Add(args[i]);
         }
@@ -116,8 +117,41 @@ public partial class MainWindow : Window
         if (args.Contains("--mini")) Mini_Click(this, new RoutedEventArgs());
         if (preset != null) Visualizer.Viz.SetPreset(preset);
         if (page != null) Navigate(page);
+        if (seamlessTest) _ = RunSeamlessSelfTest();
         if (ytTest != null) _ = RunYouTubeSelfTest(ytTest.Value.song, ytTest.Value.folder);
         if (selfTest != null) _ = RunRecordSelfTest(selfTest.Value.secs, selfTest.Value.folder);
+    }
+
+    /// <summary>Developer self-test: plays a 3-track queue with gapless + crossfade and logs when each track becomes current.</summary>
+    private async Task RunSeamlessSelfTest()
+    {
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ar_seamless_" + Guid.NewGuid().ToString("N")[..8]); System.IO.Directory.CreateDirectory(dir);
+        try
+        {
+            var tracks = new List<Core.Models.Track>();
+            for (int i = 0; i < 3; i++)
+            {
+                var path = System.IO.Path.Combine(dir, $"t{i + 1}.wav");
+                using (var w = new NAudio.Wave.WaveFileWriter(path, new NAudio.Wave.WaveFormat(44100, 16, 2)))
+                {
+                    var pcm = new float[44100 * 4 * 2]; for (int k = 0; k < 44100 * 4; k++) { float v = (float)(0.25 * Math.Sin(2 * Math.PI * (300 + i * 200) * k / 44100.0)); pcm[k * 2] = v; pcm[k * 2 + 1] = v; }
+                    w.WriteSamples(pcm, 0, pcm.Length);
+                }
+                var t = Core.Data.LibraryScanner.ReadTrack(path)!; t.Title = $"Test {i + 1}"; App.Db.UpsertTrack(t); tracks.Add(t);
+            }
+            App.Settings.Gapless = true; App.Settings.CrossfadeSeconds = 1; App.Settings.Shuffle = false; App.Settings.Repeat = "Off";
+            App.Player.Shuffle = false; App.Player.Repeat = "Off"; App.Player.Engine.Volume = 0;
+            var sw = System.Diagnostics.Stopwatch.StartNew(); var log = new List<string>();
+            App.Player.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(Services.PlayerService.QueueIndex)) log.Add($"{sw.Elapsed.TotalSeconds:0.0}s idx={App.Player.QueueIndex} '{App.Player.NowTitle}'"); };
+            App.Player.PlayQueue(tracks, 0); sw.Restart();
+            for (int i = 0; i < 200 && (App.Player.IsPlaying || sw.Elapsed.TotalSeconds < 1); i++) await Task.Delay(100);
+            var plays = tracks.Select(t => App.Db.GetTracks().First(x => x.Path == t.Path).PlayCount).ToList();
+            Serilog.Log.Information("SELFTEST seamless: {Log} | finished={Fin:0.0}s playing={Playing} playcounts={Plays}", string.Join("; ", log), sw.Elapsed.TotalSeconds, App.Player.IsPlaying, string.Join(",", plays));
+            foreach (var t in tracks) App.Db.DeleteTrack(t.Id);
+        }
+        catch (Exception ex) { Serilog.Log.Error(ex, "SELFTEST seamless failed"); }
+        finally { try { System.IO.Directory.Delete(dir, true); } catch { } }
+        Application.Current.Shutdown();
     }
 
     private async Task RunYouTubeSelfTest(string song, string folder)

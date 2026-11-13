@@ -9,11 +9,17 @@
 - **Playlists:** create, rename, delete, reorder (Move up/down), import and export `.m3u`, *Save queue*. The drop-down on the Playlists page creates **smart playlists** by genre, artist, recently added, frequently played or favorites.
 - **Equalizer & effects:** *Settings → Equalizer* (10 bands, presets) and *Audio effects* (bass, treble, reverb, echo, stereo width, compressor, limiter, normalization). Untick *Enable effects processing* for unprocessed output. *Playback speed* changes speed and pitch together.
 
+### Gapless playback and crossfade
+
+*Settings → Track transitions.* **Gapless** (on by default) opens the next song in advance and joins it with no silence — it follows shuffle, repeat and queue changes, and works across files with different sample rates. **Crossfade** (0–12 s, off by default) overlaps the end of a song with the start of the next with an equal-power fade, so the volume stays even through the blend. Very short songs get a shorter fade automatically. Skipping with Next/Previous cuts immediately. Raw `.aac` files have no reliable length, so a crossfade may not start for them (they are not covered by the tests).
+
 ## Internet radio
 
 *Internet Radio → Add station.* Paste a stream URL (Icecast, SHOUTcast, direct MP3/AAC/OGG) or a `.m3u` / `.pls` link — playlist links are resolved to the first stream. You can also import a playlist file or URL. Cards show station name, genre and country; ★ marks favorites; double-click or **Play** to listen. The now-playing title appears in the player bar when the station sends it. If the connection drops, the player reconnects automatically (you will get a notification). *Settings → Audio → Radio buffer* trades start-up delay for stability.
 
 Audio Reactor ships with **no** station list: add the stations you like.
+
+**Radio sound** (*Settings → Radio sound*): **Even volume** measures loudness (K-weighted, like streaming services do) and smoothly lifts quiet songs and lowers loud ones toward a target (−16 LUFS by default, or choose quieter/louder), by up to 12 dB; it never boosts silence or the noise between songs. **Clean sound** removes sub-bass rumble, turns down background hiss in quiet passages and protects against clipping. Both apply to radio automatically; tick *Also apply to my local music* to use them for your files too.
 
 ## Visualizer Studio
 

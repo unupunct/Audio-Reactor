@@ -23,6 +23,9 @@ public sealed class AppSettings
     public double AnimationSpeed { get; set; } = 1.0;
     public double BeatSensitivity { get; set; } = 1.0;
     public string VisualPreset { get; set; } = "Spectrum Bars";
+    public bool Gapless { get; set; } = true;
+    public double CrossfadeSeconds { get; set; }
+    public Audio.SoundCleanSettings SoundClean { get; set; } = new();
     public bool NotifyTrack { get; set; } = true;
     public bool NotifyRadio { get; set; } = true;
     public bool NotifyErrors { get; set; } = true;

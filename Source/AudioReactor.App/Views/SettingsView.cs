@@ -64,6 +64,25 @@ public sealed class SettingsView : UserControl
         };
         root.Children.Add(Section("Equalizer", eqOn, Field("Preset", preset), bands));
 
+        // Transitions (gapless / crossfade) and radio sound
+        var xfLabel = Ui.Text(s.CrossfadeSeconds < 0.05 ? "Off" : $"{s.CrossfadeSeconds:0.#} s", 13);
+        var gapless = new CheckBox { Content = "Gapless playback (no silence between tracks)", IsChecked = s.Gapless };
+        gapless.Click += (_, _) => { s.Gapless = gapless.IsChecked == true; App.Player.ApplyTransitionSettings(); };
+        var xf = Ui.Slide(0, 12, s.CrossfadeSeconds, v => { s.CrossfadeSeconds = Math.Round(v * 2) / 2; xfLabel.Text = s.CrossfadeSeconds < 0.05 ? "Off" : $"{s.CrossfadeSeconds:0.#} s"; App.Player.ApplyTransitionSettings(); }, 240);
+        root.Children.Add(Section("Track transitions", gapless, Ui.Row(Ui.Text("Crossfade", 13, true), new TextBlock { Width = 20 }, xf, new TextBlock { Width = 10 }, xfLabel),
+            Ui.Text("Crossfade overlaps the end of one song with the start of the next (it also makes playback gapless). Applies to the queue, shuffle and repeat. Not used for radio.", 11, true)));
+
+        var sc = s.SoundClean;
+        CheckBox Cb(string t, bool v, Action<bool> set) { var c = new CheckBox { Content = t, IsChecked = v }; c.Click += (_, _) => set(c.IsChecked == true); return c; }
+        var target = new ComboBox { Width = 200, ItemsSource = new[] { "Quieter (−20 LUFS)", "Normal (−16 LUFS)", "Louder (−12 LUFS)" }, SelectedIndex = sc.TargetLufs <= -18 ? 0 : sc.TargetLufs >= -14 ? 2 : 1, Margin = new Thickness(0, 6, 0, 0) };
+        target.SelectionChanged += (_, _) => sc.TargetLufs = target.SelectedIndex switch { 0 => -20, 2 => -12, _ => -16 };
+        root.Children.Add(Section("Radio sound",
+            Cb("Even volume — level every song and station to the same loudness", sc.Leveling, v => sc.Leveling = v),
+            Cb("Clean sound — remove rumble, quiet background hiss and prevent clipping", sc.Clean, v => sc.Clean = v),
+            Cb("Also apply to my local music", sc.ApplyToFiles, v => sc.ApplyToFiles = v),
+            Ui.Row(Ui.Text("Target loudness  ", 13, true), target),
+            Ui.Text("Quiet passages are brought up and loud ones down by up to 12 dB; silence and noise between songs are never boosted.", 11, true)));
+
         // Playback speed + notifications
         var speedLabel = Ui.Text($"{s.PlaybackSpeed:0.00}×", 13);
         var speedSl = Ui.Slide(0.5, 2, s.PlaybackSpeed, v => { s.PlaybackSpeed = Math.Round(v * 20) / 20; App.Player.Engine.PlaybackSpeed = (float)s.PlaybackSpeed; speedLabel.Text = $"{s.PlaybackSpeed:0.00}×"; }, 240);
